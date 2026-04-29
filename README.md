@@ -26,14 +26,24 @@ The Chrome extension wins when:
 
 ## Install
 
-### Sideload (today)
+### Chrome / Edge / Brave / Arc / Vivaldi (Chromium-based)
 
 1. `git clone https://github.com/jiejuefuyou/promptvault-chrome.git`
-2. Open Chrome → `chrome://extensions/`
+2. Open `chrome://extensions/` (or `edge://extensions/`, etc.)
 3. Enable "Developer mode" (top-right toggle)
 4. Click "Load unpacked"
 5. Select the cloned `promptvault-chrome` directory
 6. The PromptVault icon appears in your toolbar
+
+### Firefox (also supported)
+
+1. `git clone https://github.com/jiejuefuyou/promptvault-chrome.git`
+2. Open `about:debugging#/runtime/this-firefox`
+3. Click "Load Temporary Add-on…"
+4. Select `manifest.json` in the cloned directory
+5. The PromptVault icon appears in your toolbar
+
+The manifest declares `browser_specific_settings.gecko` so Firefox accepts it directly. Permissions and behavior are identical to Chromium.
 
 ### Chrome Web Store (coming soon)
 
