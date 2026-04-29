@@ -18,5 +18,11 @@
     }
   },
   "permissions": ["clipboardWrite", "storage"],
-  "homepage_url": "https://jiejuefuyou.github.io/prompts.html"
+  "homepage_url": "https://jiejuefuyou.github.io/prompts.html",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "promptvault@jiejuefuyou.github.io",
+      "strict_min_version": "109.0"
+    }
+  }
 }
