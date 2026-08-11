@@ -49,14 +49,32 @@ src/
   popup.css        responsive dark/light presentation
   core.js          pure parsing, rendering, validation and search
   app.js           DOM, dialog, keyboard and clipboard controller
-  popup.js         legacy generated bundle retained as packaged prompt data
+  popup.js         generated bundle retained as packaged prompt data
 scripts/
   verify-extension.cjs
 tests/
   core.test.cjs
 ```
 
-`popup.js` is no longer executed. `app.js` reads its first JSON payload as data and validates every record before rendering it. This keeps the existing generated library intact while separating trusted data from the new UI controller.
+`popup.js` is not executed. `app.js` reads its first JSON payload as data and validates every record before rendering it. This separates packaged content from the UI controller.
+
+## Corpus provenance
+
+The current packaged snapshot contains 160 prompts projected from:
+
+```text
+jiejuefuyou/promptvault-wechat-miniprogram
+commit 2f0ed5f319b2475fc3375f11cd0f43cb998bb39d
+```
+
+`autoapp-toolkit` run `31464066016` first proved that the previous 113-prompt Chrome and VS Code bundles shared identical content with the canonical corpus and were only missing the same 47 records. The raw canonical projection then preserved full-width punctuation, line content, and Unicode composition, produced:
+
+```text
+src/popup.js sha256
+98fd18ab932ce14ed5765639227ab296abba5e8ac12c2f7d7699b5e69fde731e
+```
+
+and passed this repository's real-bundle verification before commit. Comparison normalization is never written back into prompt content.
 
 ## Verify
 
