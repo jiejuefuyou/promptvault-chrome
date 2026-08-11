@@ -16,6 +16,12 @@ assert.equal(manifest.version, '1.1.0');
 assert.deepEqual(manifest.permissions, ['clipboardWrite']);
 assert.ok(!('host_permissions' in manifest), 'Extension must not request host permissions.');
 assert.ok(!manifest.permissions.includes('storage'), 'Unused storage permission must not return.');
+assert.deepEqual(
+  manifest.browser_specific_settings.gecko.data_collection_permissions.required,
+  ['none'],
+  'Firefox must declare that the extension collects and transmits no data.'
+);
+assert.equal(manifest.browser_specific_settings.gecko_android.strict_min_version, '142.0');
 assert.match(manifest.content_security_policy.extension_pages, /script-src 'self'/);
 assert.ok(!/\b113\b/.test(manifest.description), 'Manifest copy must not hard-code the prompt count.');
 
@@ -32,6 +38,7 @@ for (const [name, source] of [['src/core.js', coreSource], ['src/app.js', app]])
 }
 
 const prompts = core.extractBundledPrompts(legacyBundle);
+assert.ok(!/\bconst els\b|\.innerHTML\s*=|insertAdjacentHTML\s*\(/.test(legacyBundle), 'Packaged prompt data must not retain the retired controller.');
 assert.ok(prompts.length >= 20, 'Bundled library unexpectedly small.');
 assert.equal(new Set(prompts.map((prompt) => `${prompt.title}\u0000${prompt.body}`)).size, prompts.length, 'Bundled library contains exact duplicate prompts.');
 

@@ -28,7 +28,7 @@ A local-first prompt library in the browser toolbar. Search the bundled collecti
 2. Choose **Load Temporary Add-on**.
 3. Select `manifest.json`.
 
-The Manifest V3 file includes a stable Gecko extension ID and Firefox 109 minimum version.
+The Manifest V3 file includes a stable Gecko extension ID, a Firefox Desktop 109 minimum version, Firefox Android 142 minimum, and Mozilla's explicit `required: ["none"]` declaration because the extension collects and transmits no data. Firefox Desktop 109–139 ignore that newer consent metadata; current Firefox and AMO consume it.
 
 ## Privacy and permissions
 
@@ -49,14 +49,14 @@ src/
   popup.css        responsive dark/light presentation
   core.js          pure parsing, rendering, validation and search
   app.js           DOM, dialog, keyboard and clipboard controller
-  popup.js         generated bundle retained as packaged prompt data
+  popup.js         generated data-only declaration for the packaged prompts
 scripts/
   verify-extension.cjs
 tests/
   core.test.cjs
 ```
 
-`popup.js` is not executed. `app.js` reads its first JSON payload as data and validates every record before rendering it. This separates packaged content from the UI controller.
+`popup.js` is not executed and contains only the generated Prompt declaration—none of the retired controller remains in the package. `app.js` reads its JSON payload as data and validates every record before rendering it. This separates packaged content from the UI controller and keeps store validators from scanning dead DOM-writing code.
 
 ## Corpus provenance
 
@@ -71,7 +71,7 @@ commit 2f0ed5f319b2475fc3375f11cd0f43cb998bb39d
 
 ```text
 src/popup.js sha256
-98fd18ab932ce14ed5765639227ab296abba5e8ac12c2f7d7699b5e69fde731e
+13f632539024ff97d336afee12365362ec6bbdef62f6887b136844dcb656ace8
 ```
 
 and passed this repository's real-bundle verification before commit. Comparison normalization is never written back into prompt content.
