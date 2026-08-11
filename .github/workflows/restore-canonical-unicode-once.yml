@@ -1,0 +1,118 @@
+name: One-shot raw canonical corpus restore
+
+on:
+  push:
+    branches: [agent/extension-core-v1]
+    paths:
+      - ".github/workflows/restore-canonical-unicode-once.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promptvault-chrome-raw-corpus-restore
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    name: Generate raw corpus, verify, commit, and self-remove
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/extension-core-v1
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: jiejuefuyou/promptvault-wechat-miniprogram
+          ref: 2f0ed5f319b2475fc3375f11cd0f43cb998bb39d
+          path: .canonical-wechat
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Restore canonical punctuation and Unicode exactly
+        run: |
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const fs = require('node:fs');
+
+          function bounds(source, marker) {
+            const markerIndex = source.indexOf(marker);
+            if (markerIndex < 0) throw new Error(`marker not found: ${marker}`);
+            const start = source.indexOf('[', markerIndex + marker.length);
+            if (start < 0) throw new Error(`array not found after: ${marker}`);
+            let depth = 0;
+            let inString = false;
+            let escaped = false;
+            for (let index = start; index < source.length; index += 1) {
+              const character = source[index];
+              if (inString) {
+                if (escaped) escaped = false;
+                else if (character === '\\') escaped = true;
+                else if (character === '"') inString = false;
+                continue;
+              }
+              if (character === '"') inString = true;
+              else if (character === '[') depth += 1;
+              else if (character === ']') {
+                depth -= 1;
+                if (depth === 0) return [start, index + 1];
+              }
+            }
+            throw new Error(`unterminated array after: ${marker}`);
+          }
+
+          const canonicalSource = fs.readFileSync('.canonical-wechat/utils/prompts.js', 'utf8');
+          const [canonicalStart, canonicalEnd] = bounds(canonicalSource, 'module.exports =');
+          const canonical = JSON.parse(canonicalSource.slice(canonicalStart, canonicalEnd));
+          if (canonical.length !== 160) throw new Error(`expected 160 canonical prompts, found ${canonical.length}`);
+
+          const projected = canonical.map((raw, index) => {
+            const title = String(raw.title ?? '').trim();
+            const body = String(raw.body ?? '').trim();
+            const tags = Array.isArray(raw.tags)
+              ? [...new Set(raw.tags.map((tag) => String(tag).trim()).filter(Boolean))]
+              : [];
+            if (!title || !body) throw new Error(`canonical prompt ${index + 1} lacks title/body`);
+            return { title, body, tags };
+          });
+          if (new Set(projected.map((item) => `${item.title}\u0000${item.body}`)).size !== projected.length) {
+            throw new Error('canonical corpus contains exact duplicate title/body records');
+          }
+
+          const targetPath = 'src/popup.js';
+          const target = fs.readFileSync(targetPath, 'utf8');
+          const [start, end] = bounds(target, 'const PROMPTS =');
+          const prefix = target.slice(0, start);
+          const suffix = target.slice(end);
+          const output = prefix + JSON.stringify(projected, null, 2) + suffix;
+          if (!output.startsWith(prefix) || !output.endsWith(suffix)) throw new Error('bundle wrapper changed');
+          fs.writeFileSync(targetPath, output, 'utf8');
+
+          const digest = crypto.createHash('sha256').update(output).digest('hex');
+          const expected = '98fd18ab932ce14ed5765639227ab296abba5e8ac12c2f7d7699b5e69fde731e';
+          if (digest !== expected) throw new Error(`generated SHA mismatch: ${digest} != ${expected}`);
+          console.log(`restored ${projected.length} raw prompts, sha256=${digest}`);
+          NODE
+      - name: Verify final extension against the restored real bundle
+        run: npm run verify
+      - name: Commit tested corpus and remove this one-shot workflow
+        run: |
+          rm -rf .canonical-wechat
+          rm .github/workflows/restore-canonical-unicode-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/popup.js .github/workflows/restore-canonical-unicode-once.yml
+          git commit -m "data: restore canonical Unicode across 160 prompts"
+          git push origin HEAD:agent/extension-core-v1
+          {
+            echo "## Raw canonical corpus restore"
+            echo
+            echo "- canonical: promptvault-wechat-miniprogram@2f0ed5f319b2475fc3375f11cd0f43cb998bb39d"
+            echo "- prompts: 160"
+            echo "- file sha256: 98fd18ab932ce14ed5765639227ab296abba5e8ac12c2f7d7699b5e69fde731e"
+            echo "- verified with: npm run verify"
+            echo "- committed: $(git rev-parse HEAD)"
+          } >> "$GITHUB_STEP_SUMMARY"
