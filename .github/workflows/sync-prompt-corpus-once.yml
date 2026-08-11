@@ -74,15 +74,31 @@ jobs:
             return JSON.parse(source.slice(start, end));
           }
 
+          function normalizeText(value) {
+            const lines = String(value ?? '')
+              .normalize('NFKC')
+              .replace(/\r\n/g, '\n')
+              .replace(/\r/g, '\n')
+              .split('\n')
+              .map((line) => line.trimEnd());
+            while (lines.length && lines[0] === '') lines.shift();
+            while (lines.length && lines[lines.length - 1] === '') lines.pop();
+            return lines.join('\n');
+          }
+
+          function normalizeTag(value) {
+            return normalizeText(value).split(/\s+/u).filter(Boolean).join(' ');
+          }
+
           const canonicalPath = '.canonical-wechat/utils/prompts.js';
           const targetPath = 'src/popup.js';
           const canonical = parseArray(fs.readFileSync(canonicalPath, 'utf8'), 'module.exports =');
           if (canonical.length !== 160) throw new Error(`expected 160 canonical prompts, found ${canonical.length}`);
           const projected = canonical.map((raw, index) => {
-            const title = String(raw.title || '').trim();
-            const body = String(raw.body || '').trim();
+            const title = normalizeText(raw.title);
+            const body = normalizeText(raw.body);
             const tags = Array.isArray(raw.tags)
-              ? [...new Set(raw.tags.map((tag) => String(tag).trim()).filter(Boolean))]
+              ? [...new Set(raw.tags.map(normalizeTag).filter(Boolean))]
               : [];
             if (!title || !body) throw new Error(`canonical prompt ${index + 1} lacks title/body`);
             return { title, body, tags };
@@ -93,11 +109,14 @@ jobs:
 
           const target = fs.readFileSync(targetPath, 'utf8');
           const [start, end] = bounds(target, 'const PROMPTS =');
-          const output = target.slice(0, start) + JSON.stringify(projected, null, 2) + target.slice(end);
+          const prefix = target.slice(0, start);
+          const suffix = target.slice(end);
+          const output = prefix + JSON.stringify(projected, null, 2) + suffix;
           fs.writeFileSync(targetPath, output, 'utf8');
           const digest = crypto.createHash('sha256').update(output).digest('hex');
           const expected = '25b1e25fc75c99787e729eec81c72db5e89f751132cc64859c64a4bdbec58304';
           if (digest !== expected) throw new Error(`generated SHA mismatch: ${digest} != ${expected}`);
+          if (!output.startsWith(prefix) || !output.endsWith(suffix)) throw new Error('bundle wrapper changed');
           console.log(`generated ${projected.length} prompts, sha256=${digest}`);
           NODE
       - name: Verify the generated extension against its real bundle
