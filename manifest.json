@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PromptVault",
-  "version": "1.0.0",
-  "description": "113 AI prompts with {{variable}} substitution. Click prompts in your browser toolbar, fill the blanks, copy to ChatGPT / Claude / Cursor / Midjourney.",
+  "version": "1.1.0",
+  "description": "A local AI prompt library with typed {{variable}} fields, live preview, search, and one-click copy.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -11,18 +11,27 @@
   },
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "PromptVault — 113 AI prompts",
+    "default_title": "PromptVault — local AI prompt library",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"
     }
   },
-  "permissions": ["clipboardWrite", "storage"],
+  "permissions": ["clipboardWrite"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "homepage_url": "https://jiejuefuyou.github.io/prompts.html",
   "browser_specific_settings": {
     "gecko": {
       "id": "promptvault@jiejuefuyou.github.io",
+      "data_collection_permissions": {
+        "required": ["none"]
+      },
       "strict_min_version": "109.0"
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
     }
   }
 }
