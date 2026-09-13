@@ -26,6 +26,7 @@
     activePrompt: null,
     activeTrigger: null,
     copyResetTimer: null,
+    copyOperation: null,
     loading: false,
   };
 
@@ -139,6 +140,7 @@
 
   function openPrompt(prompt, trigger) {
     clearCopyTimer();
+    state.copyOperation = null;
     state.activePrompt = prompt;
     state.activeTrigger = trigger;
     elements.dialogTitle.textContent = prompt.title;
@@ -230,15 +232,20 @@
 
   function updatePreview() {
     if (!state.activePrompt) return;
+    clearCopyTimer();
+    resetCopyButton();
     const values = currentValues();
     const preview = elements.dialogBody.querySelector('#renderedPreview');
     if (preview) preview.textContent = core.renderPrompt(state.activePrompt.body, values);
     const invalidIntegers = [...elements.dialogBody.querySelectorAll('[data-variable-type="int"]')]
       .filter((input) => input.value.length > 0 && !/^-?\d+$/.test(input.value));
     const unresolved = core.unresolvedVariables(state.activePrompt.body, values);
-    elements.dialogCopy.disabled = invalidIntegers.length > 0;
+    elements.dialogCopy.disabled = state.copyOperation !== null || invalidIntegers.length > 0;
+    if (state.copyOperation) elements.dialogCopy.textContent = 'Copying…';
     if (invalidIntegers.length > 0) {
       elements.dialogStatus.textContent = 'Integer fields must contain whole numbers.';
+    } else if (state.copyOperation) {
+      elements.dialogStatus.textContent = 'Copying to clipboard…';
     } else if (unresolved.length > 0) {
       elements.dialogStatus.textContent = `${unresolved.length} required variable${unresolved.length === 1 ? '' : 's'} still empty; placeholders will be preserved.`;
     } else {
@@ -247,44 +254,67 @@
   }
 
   async function copyCurrentPrompt() {
-    if (!state.activePrompt || elements.dialogCopy.disabled) return;
+    if (!state.activePrompt || state.copyOperation || elements.dialogCopy.disabled) return;
     const text = currentRenderedText();
-    elements.dialogCopy.disabled = true;
+    // Identity, not the prompt object: reopening the same prompt is a new session.
+    const operation = {};
+    state.copyOperation = operation;
+    const isCurrent = () => state.copyOperation === operation;
+    updatePreview();
     try {
-      await writeClipboard(text);
+      await writeClipboard(text, isCurrent);
+      if (!isCurrent()) return;
+      state.copyOperation = null;
+      updatePreview();
+      // The clipboard contains the submitted snapshot, not edits made while waiting.
+      if (currentRenderedText() !== text || elements.dialogCopy.disabled) return;
+      elements.dialogCopy.disabled = true;
       elements.dialogCopy.classList.add('copied');
       elements.dialogCopy.textContent = 'Copied';
       elements.dialogStatus.textContent = 'Copied to clipboard.';
-      clearCopyTimer();
-      state.copyResetTimer = window.setTimeout(() => {
-        resetCopyButton();
-        updatePreview();
-      }, 1400);
+      state.copyResetTimer = window.setTimeout(updatePreview, 1400);
     } catch (error) {
+      if (!isCurrent()) return;
+      state.copyOperation = null;
+      updatePreview();
       elements.dialogStatus.textContent = `Copy failed: ${error instanceof Error ? error.message : String(error)}`;
-      elements.dialogCopy.disabled = false;
     }
   }
 
-  async function writeClipboard(text) {
+  async function writeClipboard(text, isCurrent) {
     if (navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(text);
         return;
       } catch (error) {
+        // A closed/replaced dialog must not start a stale fallback clipboard write.
+        if (!isCurrent()) return;
         console.warn('Clipboard API failed; using selection fallback.', error);
       }
     }
+    if (!isCurrent()) return;
 
+    const previousFocus = document.activeElement;
+    const selection = typeof previousFocus?.selectionStart === 'number'
+      ? [previousFocus.selectionStart, previousFocus.selectionEnd, previousFocus.selectionDirection]
+      : null;
     const fallback = document.createElement('textarea');
     fallback.value = text;
     fallback.setAttribute('readonly', '');
     fallback.className = 'clipboard-fallback';
-    document.body.append(fallback);
-    fallback.select();
-    const copied = document.execCommand('copy');
-    fallback.remove();
-    if (!copied) throw new Error('The browser denied clipboard access.');
+    // Elements outside showModal() are inert and cannot receive the selection.
+    elements.dialog.append(fallback);
+    try {
+      fallback.focus({ preventScroll: true });
+      fallback.select();
+      if (!document.execCommand('copy')) throw new Error('The browser denied clipboard access.');
+    } finally {
+      fallback.remove();
+      if (previousFocus?.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+        if (selection) previousFocus.setSelectionRange(...selection);
+      }
+    }
   }
 
   function resetCopyButton() {
@@ -296,6 +326,7 @@
   function closeDialog() {
     if (!elements.dialog.open) return;
     clearCopyTimer();
+    state.copyOperation = null;
     elements.dialog.close();
     const trigger = state.activeTrigger;
     state.activePrompt = null;
