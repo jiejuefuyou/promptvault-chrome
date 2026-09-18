@@ -1,0 +1,3 @@
+# tests/browser 的 Python 回归：运行缓存与 README 指引的隔离环境都不入库、不进商店包
+__pycache__/
+.venv-browser/
